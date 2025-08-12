@@ -78,7 +78,7 @@ function App() {
         <Route path="products/bulk-upload" element={<BulkUploadPage />} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/\" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

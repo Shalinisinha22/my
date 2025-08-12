@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search, FileText, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
+import axiosInstance from '../config/axios';
 
 interface Page {
   _id: string;
   title: string;
   slug: string;
   content: string;
-  metaDescription?: string;
-  isPublished: boolean;
+  seo?: {
+    metaDescription?: string;
+  };
+  status: 'draft' | 'published' | 'private';
   createdAt: string;
   updatedAt: string;
 }
@@ -23,68 +26,58 @@ const PagesPage: React.FC = () => {
     slug: '',
     content: '',
     metaDescription: '',
-    isPublished: true,
+    status: 'published' as 'draft' | 'published' | 'private',
   });
 
-  // Mock data for demonstration
   useEffect(() => {
-    const mockPages: Page[] = [
-      {
-        _id: '1',
-        title: 'About Us',
-        slug: 'about-us',
-        content: '<h1>About EWA Fashion</h1><p>We are a leading fashion retailer...</p>',
-        metaDescription: 'Learn about EWA Fashion, our story, and our commitment to quality.',
-        isPublished: true,
-        createdAt: '2024-01-01',
-        updatedAt: '2024-01-15',
-      },
-      {
-        _id: '2',
-        title: 'Privacy Policy',
-        slug: 'privacy-policy',
-        content: '<h1>Privacy Policy</h1><p>Your privacy is important to us...</p>',
-        metaDescription: 'EWA Fashion privacy policy and data protection information.',
-        isPublished: true,
-        createdAt: '2024-01-01',
-        updatedAt: '2024-01-01',
-      },
-      {
-        _id: '3',
-        title: 'Terms of Service',
-        slug: 'terms-of-service',
-        content: '<h1>Terms of Service</h1><p>By using our website...</p>',
-        isPublished: false,
-        createdAt: '2024-01-10',
-        updatedAt: '2024-01-10',
-      },
-    ];
-    setPages(mockPages);
+    fetchPages();
   }, []);
+
+  const fetchPages = async () => {
+    try {
+      const { data } = await axiosInstance.get('/pages');
+      setPages(data.pages || []);
+    } catch (error: any) {
+      toast.error('Failed to fetch pages');
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const newPage: Page = {
-      _id: editingPage?._id || Date.now().toString(),
+    const pageData = {
       title: formData.title,
       slug: formData.slug || formData.title.toLowerCase().replace(/\s+/g, '-'),
       content: formData.content,
-      metaDescription: formData.metaDescription,
-      isPublished: formData.isPublished,
-      createdAt: editingPage?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      seo: {
+        metaDescription: formData.metaDescription,
+      },
+      status: formData.status,
     };
 
-    if (editingPage) {
-      setPages(prev => prev.map(p => p._id === editingPage._id ? newPage : p));
-      toast.success('Page updated successfully');
-    } else {
-      setPages(prev => [...prev, newPage]);
-      toast.success('Page created successfully');
-    }
+    const apiCall = editingPage 
+      ? axiosInstance.put(`/pages/${editingPage._id}`, pageData)
+      : axiosInstance.post('/pages', pageData);
 
-    resetForm();
+    apiCall.then(() => {
+      toast.success(editingPage ? 'Page updated successfully' : 'Page created successfully');
+      fetchPages();
+      resetForm();
+    }).catch((error: any) => {
+      toast.error(error.response?.data?.message || 'Failed to save page');
+    });
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this page?')) {
+      try {
+        await axiosInstance.delete(`/pages/${id}`);
+        toast.success('Page deleted successfully');
+        fetchPages();
+      } catch (error: any) {
+        toast.error('Failed to delete page');
+      }
+    }
   };
 
   const resetForm = () => {
@@ -93,7 +86,7 @@ const PagesPage: React.FC = () => {
       slug: '',
       content: '',
       metaDescription: '',
-      isPublished: true,
+      status: 'published',
     });
     setEditingPage(null);
     setShowForm(false);
@@ -104,18 +97,11 @@ const PagesPage: React.FC = () => {
       title: page.title,
       slug: page.slug,
       content: page.content,
-      metaDescription: page.metaDescription || '',
-      isPublished: page.isPublished,
+      metaDescription: page.seo?.metaDescription || '',
+      status: page.status,
     });
     setEditingPage(page);
     setShowForm(true);
-  };
-
-  const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this page?')) {
-      setPages(prev => prev.filter(p => p._id !== id));
-      toast.success('Page deleted successfully');
-    }
   };
 
   const filteredPages = pages.filter(page =>
@@ -206,8 +192,8 @@ const PagesPage: React.FC = () => {
                 <label className="flex items-center">
                   <input
                     type="checkbox"
-                    checked={formData.isPublished}
-                    onChange={(e) => setFormData({ ...formData, isPublished: e.target.checked })}
+                    checked={formData.status === 'published'}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.checked ? 'published' : 'draft' })}
                     className="mr-2"
                   />
                   Published
@@ -271,8 +257,8 @@ const PagesPage: React.FC = () => {
                     </code>
                   </td>
                   <td>
-                    <span className={`badge ${page.isPublished ? 'badge-success' : 'badge-warning'}`}>
-                      {page.isPublished ? 'Published' : 'Draft'}
+                    <span className={`badge ${page.status === 'published' ? 'badge-success' : 'badge-warning'}`}>
+                      {page.status === 'published' ? 'Published' : page.status}
                     </span>
                   </td>
                   <td>
