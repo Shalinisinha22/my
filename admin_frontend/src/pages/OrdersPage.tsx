@@ -6,15 +6,24 @@ import { Search, Filter, ShoppingBag, Clock, User, Eye } from 'lucide-react';
 
 interface Order {
   _id: string;
-  user: {
+  customer: {
     _id: string;
-    name: string;
+    firstName: string;
+    lastName: string;
+    email: string;
   };
-  totalPrice: number;
-  isPaid: boolean;
-  paidAt: string;
-  isDelivered: boolean;
-  deliveredAt: string;
+  orderNumber: string;
+  pricing: {
+    total: number;
+  };
+  payment: {
+    status: string;
+    paidAt?: string;
+  };
+  fulfillment: {
+    status: string;
+    deliveredAt?: string;
+  };
   status: string;
   createdAt: string;
 }
@@ -35,13 +44,14 @@ const OrdersPage: React.FC = () => {
         setLoading(true);
         const { data } = await axiosInstance.get('/orders', {
           params: { 
-            pageNumber: currentPage,
+            page: currentPage,
             status: statusFilter || undefined,
             search: searchTerm || undefined
           },
         });
         setOrders(data.orders || []);
         setTotalPages(data.pages || 1);
+        setCurrentPage(data.page || 1);
       } catch (err: any) {
         setError(err.response?.data?.message || 'Error fetching orders');
         toast.error('Failed to fetch orders');
@@ -165,12 +175,12 @@ const OrdersPage: React.FC = () => {
                 {filteredOrders.map((order) => (
                   <tr key={order._id}>
                     <td className="font-medium">
-                      #{order._id.substring(order._id.length - 6)}
+                      #{order.orderNumber || order._id.substring(order._id.length - 6)}
                     </td>
                     <td>
                       <div className="flex items-center">
                         <User className="h-5 w-5 text-gray-400 mr-2" />
-                        {order.user?.name || 'Unknown User'}
+                        {order.customer ? `${order.customer.firstName} ${order.customer.lastName}` : 'Unknown User'}
                       </div>
                     </td>
                     <td className="flex items-center text-gray-500">
@@ -178,7 +188,7 @@ const OrdersPage: React.FC = () => {
                       {formatDate(order.createdAt)}
                     </td>
                     <td className="font-medium">
-                      ${order.totalPrice.toFixed(2)}
+                      ${order.pricing.total.toFixed(2)}
                     </td>
                     <td>
                       <span className={`badge ${getStatusBadgeClass(order.status)}`}>
@@ -187,9 +197,9 @@ const OrdersPage: React.FC = () => {
                     </td>
                     <td>
                       <span className={`badge ${
-                        order.isPaid ? 'badge-success' : 'badge-warning'
+                        order.payment.status === 'completed' ? 'badge-success' : 'badge-warning'
                       }`}>
-                        {order.isPaid ? 'Paid' : 'Unpaid'}
+                        {order.payment.status === 'completed' ? 'Paid' : 'Unpaid'}
                       </span>
                     </td>
                     <td>

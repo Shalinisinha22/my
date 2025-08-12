@@ -10,7 +10,7 @@ import {
   AlertTriangle,
   AlertCircle
 } from 'lucide-react';
-import axios from 'axios';
+import axiosInstance from '../config/axios';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 
@@ -24,59 +24,36 @@ interface StatisticsData {
   deliveredOrders: number;
   cancelledOrders: number;
   totalRevenue: number;
-  last7DaysOrders: number;
-  todayOrders: number;
-  weekOrders: number;
-  monthOrders: number;
-  todayRevenue: number;
-  weekRevenue: number;
-  monthRevenue: number;
-  lowStockProducts: number;
-  totalCustomers: number;
-  totalProducts: number;
+  averageOrderValue: number;
 }
 
-const formatRevenue = (value: number | undefined): string => {
-  if (typeof value === 'number') {
-    return `$${value.toFixed(2)}`;
-  }
-  return '$0.00';
-};
+interface DashboardData {
+  orders: StatisticsData;
+  products: {
+    totalProducts: number;
+    activeProducts: number;
+    lowStockProducts: number;
+  };
+  customers: {
+    totalCustomers: number;
+    newCustomersToday: number;
+    newCustomersWeek: number;
+    newCustomersMonth: number;
+  };
+  recentOrders: any[];
+  lowStockProducts: any[];
+}
 
 const DashboardPage: React.FC = () => {
-  const [statistics, setStatistics] = useState<StatisticsData | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [lowStockProducts] = useState([
-    { name: 'Evening Gown', stock: 2, sku: 'GW-EG-2024' },
-    { name: 'Diamond Earrings', stock: 1, sku: 'SB-DE-007' },
-    { name: 'Silk Scarf', stock: 3, sku: 'SR-SS-005' },
-  ]);
 
   useEffect(() => {
     const fetchStatistics = async () => {
       try {
-        // Mock data for demonstration
-        const mockStats: StatisticsData = {
-          totalOrders: 1234,
-          pendingOrders: 45,
-          processingOrders: 23,
-          shippedOrders: 67,
-          deliveredOrders: 1099,
-          cancelledOrders: 12,
-          totalRevenue: 485000,
-          last7DaysOrders: 89,
-          todayOrders: 12,
-          weekOrders: 89,
-          monthOrders: 345,
-          todayRevenue: 15000,
-          weekRevenue: 85000,
-          monthRevenue: 185000,
-          lowStockProducts: 3,
-          totalCustomers: 1235,
-          totalProducts: 254,
-        };
-        setStatistics(mockStats);
+        const { data } = await axiosInstance.get('/reports/dashboard');
+        setDashboardData(data);
       } catch (err: any) {
         setError(err.response?.data?.message || 'Failed to fetch statistics');
       } finally {
@@ -90,28 +67,28 @@ const DashboardPage: React.FC = () => {
   const statsCards = [
     {
       title: 'Today Revenue',
-      value: formatRevenue(statistics?.todayRevenue),
+      value: `$${dashboardData?.orders?.totalRevenue?.toFixed(2) || '0.00'}`,
       icon: <CreditCard className="h-6 w-6 text-purple-500" />,
       change: '+12.5%',
       bgColor: 'bg-purple-50',
     },
     {
       title: 'Today Orders',
-      value: statistics?.todayOrders || 0,
+      value: dashboardData?.orders?.totalOrders || 0,
       icon: <ShoppingBag className="h-6 w-6 text-blue-500" />,
       change: '+8.2%',
       bgColor: 'bg-blue-50',
     },
     {
       title: 'Total Products',
-      value: statistics?.totalProducts || 0,
+      value: dashboardData?.products?.totalProducts || 0,
       icon: <Package className="h-6 w-6 text-green-500" />,
       change: '+3.1%',
       bgColor: 'bg-green-50',
     },
     {
       title: 'Total Customers',
-      value: statistics?.totalCustomers || 0,
+      value: dashboardData?.customers?.totalCustomers || 0,
       icon: <Users className="h-6 w-6 text-orange-500" />,
       change: '+5.7%',
       bgColor: 'bg-orange-50',
@@ -137,12 +114,12 @@ const DashboardPage: React.FC = () => {
     datasets: [
       {
         label: 'Order Status',
-        data: statistics ? [
-          statistics.pendingOrders, 
-          statistics.processingOrders,
-          statistics.shippedOrders,
-          statistics.deliveredOrders,
-          statistics.cancelledOrders
+        data: dashboardData?.orders ? [
+          dashboardData.orders.pendingOrders, 
+          dashboardData.orders.processingOrders,
+          dashboardData.orders.shippedOrders,
+          dashboardData.orders.deliveredOrders,
+          dashboardData.orders.cancelledOrders
         ] : [0, 0, 0, 0, 0],
         backgroundColor: [
           '#FFA500',  // Orange for Pending
@@ -279,18 +256,23 @@ const DashboardPage: React.FC = () => {
         <div className="card p-6">
           <h3 className="text-lg font-semibold mb-4">Low Stock Alert</h3>
           <div className="space-y-3">
-            {lowStockProducts.map((product, index) => (
+            {(dashboardData?.lowStockProducts || []).map((product, index) => (
               <div key={index} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
                 <div>
                   <p className="font-medium text-sm">{product.name}</p>
-                  <p className="text-xs text-gray-500">{product.sku}</p>
+                  <p className="text-xs text-gray-500">{product.sku || 'No SKU'}</p>
                 </div>
                 <div className="flex items-center text-red-600">
                   <AlertCircle className="h-4 w-4 mr-1" />
-                  <span className="text-sm font-medium">{product.stock} left</span>
+                  <span className="text-sm font-medium">{product.stock?.quantity || 0} left</span>
                 </div>
               </div>
             ))}
+            {(!dashboardData?.lowStockProducts || dashboardData.lowStockProducts.length === 0) && (
+              <div className="text-center py-4 text-gray-500">
+                <p>No low stock alerts</p>
+              </div>
+            )}
           </div>
           <button className="w-full mt-4 text-sm text-primary-600 hover:text-primary-700">
             View all low stock items
@@ -345,28 +327,34 @@ const DashboardPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                <tr>
-                  <td className="text-sm font-medium">#ORD-1234</td>
-                  <td>Sarah Johnson</td>
-                  <td>$158.50</td>
-                  <td>
-                    <span className="badge badge-success">Delivered</span>
-                  </td>
-                  <td className="flex items-center text-gray-500">
-                    <Clock className="h-3 w-3 mr-1" /> 2h ago
-                  </td>
-                </tr>
-                <tr>
-                  <td className="text-sm font-medium">#ORD-1233</td>
-                  <td>Michael Chen</td>
-                  <td>$89.99</td>
-                  <td>
-                    <span className="badge badge-warning">Processing</span>
-                  </td>
-                  <td className="flex items-center text-gray-500">
-                    <Clock className="h-3 w-3 mr-1" /> 3h ago
-                  </td>
-                </tr>
+                {(dashboardData?.recentOrders || []).slice(0, 5).map((order) => (
+                  <tr key={order._id}>
+                    <td className="text-sm font-medium">#{order.orderNumber}</td>
+                    <td>{order.customer?.firstName} {order.customer?.lastName}</td>
+                    <td>${order.pricing?.total?.toFixed(2)}</td>
+                    <td>
+                      <span className={`badge ${
+                        order.status === 'delivered' ? 'badge-success' :
+                        order.status === 'shipped' ? 'badge-info' :
+                        order.status === 'processing' ? 'badge-warning' :
+                        'badge'
+                      }`}>
+                        {order.status}
+                      </span>
+                    </td>
+                    <td className="flex items-center text-gray-500">
+                      <Clock className="h-3 w-3 mr-1" />
+                      {new Date(order.createdAt).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+                {(!dashboardData?.recentOrders || dashboardData.recentOrders.length === 0) && (
+                  <tr>
+                    <td colSpan={5} className="text-center py-4 text-gray-500">
+                      No recent orders
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

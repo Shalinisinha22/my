@@ -5,9 +5,11 @@ import { Search, Filter, User, Mail, Trash, Edit, UserPlus } from 'lucide-react'
 
 interface Customer {
   _id: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
-  isAdmin: boolean;
+  phone?: string;
+  status: string;
   createdAt: string;
 }
 
@@ -31,7 +33,8 @@ const CustomersPage: React.FC = () => {
       const { data } = await axiosInstance.get<ApiResponse>('/users', {
         params: {
           pageNumber: page,
-          keyword: search || undefined
+          keyword: search || undefined,
+          pageSize: 10
         }
       });
       setCustomers(data.users || []);
@@ -157,12 +160,12 @@ const CustomersPage: React.FC = () => {
                         <div className="flex items-center">
                           <div className="h-10 w-10 flex-shrink-0">
                             <div className="h-full w-full rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-semibold">
-                              {customer.name.charAt(0).toUpperCase()}
+                              {customer.firstName.charAt(0).toUpperCase()}
                             </div>
                           </div>
                           <div className="ml-4">
                             <div className="font-medium text-gray-900">
-                              {customer.name}
+                              {customer.firstName} {customer.lastName}
                             </div>
                             <div className="text-gray-500 text-xs">
                               ID: {customer._id.substring(0, 8)}...
@@ -177,12 +180,11 @@ const CustomersPage: React.FC = () => {
                         </div>
                       </td>
                       <td>
-                        <span
-                          className={`badge ${
-                            customer.isAdmin ? 'badge-info' : 'badge-success'
-                          }`}
-                        >
-                          {customer.isAdmin ? 'Admin' : 'Customer'}
+                        <span className={`badge ${
+                          customer.status === 'active' ? 'badge-success' : 
+                          customer.status === 'blocked' ? 'badge-danger' : 'badge-warning'
+                        }`}>
+                          {customer.status.charAt(0).toUpperCase() + customer.status.slice(1)}
                         </span>
                       </td>
                       <td>{formatDate(customer.createdAt)}</td>

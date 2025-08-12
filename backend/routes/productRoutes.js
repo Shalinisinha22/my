@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const {
   getProducts,
   getProductById,
@@ -14,10 +15,26 @@ const {
   updateProductStock,
   bulkUpdateProducts,
   getProductStats,
-  recalculateCategoryProductCounts
+  recalculateCategoryProductCounts,
+  bulkUploadProducts
 } = require('../controllers/productController');
 const { protect, storeAccess, checkPermission } = require('../middleware/auth');
 const { identifyStore } = require('../middleware/storeIdentification');
+
+// Configure multer for CSV uploads
+const csvUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only CSV files are allowed'), false);
+    }
+  },
+});
 
 // Public routes (no authentication required)
 router.get('/public', identifyStore, getPublicProducts);
@@ -41,6 +58,7 @@ router.get('/search', searchProducts);
 router.get('/stats', getProductStats);
 router.get('/category/:categoryId', getProductsByCategory);
 router.post('/recalculate-category-counts', recalculateCategoryProductCounts);
+router.post('/bulk-upload', csvUpload.single('csv'), bulkUploadProducts);
 
 router.route('/:id')
   .get(getProductById)
