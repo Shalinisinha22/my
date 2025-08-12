@@ -15,26 +15,42 @@ interface OrderItem {
 
 interface Order {
   _id: string;
-  user: {
+  customer: {
     _id: string;
-    name: string;
+    firstName: string;
+    lastName: string;
     email: string;
+    phone?: string;
   };
-  orderItems: OrderItem[];
-  shippingAddress: {
-    address: string;
-    city: string;
-    postalCode: string;
-    country: string;
+  orderNumber: string;
+  items: OrderItem[];
+  shipping: {
+    firstName: string;
+    lastName: string;
+    address: {
+      line1: string;
+      line2?: string;
+      city: string;
+      state: string;
+      country: string;
+      zipCode: string;
+    };
   };
-  paymentMethod: string;
-  taxPrice: number;
-  shippingPrice: number;
-  totalPrice: number;
-  isPaid: boolean;
-  paidAt: string | null;
-  isDelivered: boolean;
-  deliveredAt: string | null;
+  payment: {
+    method: string;
+    status: string;
+    paidAt?: string;
+  };
+  pricing: {
+    subtotal: number;
+    tax: number;
+    shipping: number;
+    total: number;
+  };
+  fulfillment: {
+    status: string;
+    deliveredAt?: string;
+  };
   status: string;
   createdAt: string;
 }
@@ -96,7 +112,7 @@ const OrderDetailPage: React.FC = () => {
   };
 
   const handleMarkAsPaid = async () => {
-    if (!order || order.isPaid || updatingStatus) return;
+    if (!order || order.payment.status === 'completed' || updatingStatus) return;
 
     try {
       setUpdatingStatus(true);
@@ -104,7 +120,7 @@ const OrderDetailPage: React.FC = () => {
         id: Date.now().toString(),
         status: 'COMPLETED',
         update_time: new Date().toISOString(),
-        payer: { email_address: order.user.email },
+        payer: { email_address: order.customer.email },
       });
       await fetchOrderDetails(); // Refresh order data
       toast.success('Order marked as paid');
@@ -184,7 +200,7 @@ const OrderDetailPage: React.FC = () => {
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-medium flex items-center">
                 <Package className="h-5 w-5 mr-2 text-primary-500" />
-                Order #{order._id.substring(order._id.length - 6)}
+                Order #{order.orderNumber || order._id.substring(order._id.length - 6)}
               </h2>
               <span className={`badge ${getStatusBadgeClass(order.status)}`}>{order.status}</span>
             </div>
@@ -194,16 +210,16 @@ const OrderDetailPage: React.FC = () => {
                 <Clock className="h-4 w-4 mr-1 text-gray-400" />
                 <span>Ordered: {formatDate(order.createdAt)}</span>
               </div>
-              {order.isPaid && (
+              {order.payment.status === 'completed' && (
                 <div className="flex items-center">
                   <CreditCard className="h-4 w-4 mr-1 text-gray-400" />
-                  <span>Paid: {formatDate(order.paidAt)}</span>
+                  <span>Paid: {formatDate(order.payment.paidAt)}</span>
                 </div>
               )}
-              {order.isDelivered && (
+              {order.fulfillment.deliveredAt && (
                 <div className="flex items-center">
                   <Truck className="h-4 w-4 mr-1 text-gray-400" />
-                  <span>Delivered: {formatDate(order.deliveredAt)}</span>
+                  <span>Delivered: {formatDate(order.fulfillment.deliveredAt)}</span>
                 </div>
               )}
             </div>
@@ -211,7 +227,7 @@ const OrderDetailPage: React.FC = () => {
             <div className="border-t border-gray-200 pt-4">
               <h3 className="font-medium mb-3">Items</h3>
               <div className="space-y-3">
-                {order.orderItems.map((item) => (
+                {order.items.map((item) => (
                   <div key={item._id} className="flex items-center py-3 border-b border-gray-100">
                     <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md border border-gray-200">
                       <img
@@ -240,8 +256,9 @@ const OrderDetailPage: React.FC = () => {
                 <User className="h-5 w-5 mr-2 text-primary-500" />
                 Customer
               </h3>
-              <p className="text-sm">{order.user.name}</p>
-              <p className="text-sm">{order.user.email}</p>
+              <p className="text-sm">{order.customer.firstName} {order.customer.lastName}</p>
+              <p className="text-sm">{order.customer.email}</p>
+              {order.customer.phone && <p className="text-sm">{order.customer.phone}</p>}
             </div>
             
             {/* Shipping Information */}
@@ -250,11 +267,13 @@ const OrderDetailPage: React.FC = () => {
                 <MapPin className="h-5 w-5 mr-2 text-primary-500" />
                 Shipping Address
               </h3>
-              <p className="text-sm">{order.shippingAddress.address}</p>
+              <p className="text-sm">{order.shipping.firstName} {order.shipping.lastName}</p>
+              <p className="text-sm">{order.shipping.address.line1}</p>
+              {order.shipping.address.line2 && <p className="text-sm">{order.shipping.address.line2}</p>}
               <p className="text-sm">
-                {order.shippingAddress.city}, {order.shippingAddress.postalCode}
+                {order.shipping.address.city}, {order.shipping.address.state} {order.shipping.address.zipCode}
               </p>
-              <p className="text-sm">{order.shippingAddress.country}</p>
+              <p className="text-sm">{order.shipping.address.country}</p>
             </div>
           </div>
         </div>
@@ -267,20 +286,20 @@ const OrderDetailPage: React.FC = () => {
               <div className="flex justify-between">
                 <span>Subtotal</span>
                 <span>
-                  ${(order.totalPrice - order.taxPrice - order.shippingPrice).toFixed(2)}
+                  ${order.pricing.subtotal.toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span>Shipping</span>
-                <span>${order.shippingPrice.toFixed(2)}</span>
+                <span>${order.pricing.shipping.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Tax</span>
-                <span>${order.taxPrice.toFixed(2)}</span>
+                <span>${order.pricing.tax.toFixed(2)}</span>
               </div>
               <div className="flex justify-between font-bold pt-2 border-t border-gray-200">
                 <span>Total</span>
-                <span>${order.totalPrice.toFixed(2)}</span>
+                <span>${order.pricing.total.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -317,7 +336,7 @@ const OrderDetailPage: React.FC = () => {
                 {updatingStatus ? 'Updating...' : 'Update Status'}
               </button>
               
-              {!order.isPaid && (
+              {order.payment.status !== 'completed' && (
                 <button
                   onClick={handleMarkAsPaid}
                   disabled={updatingStatus}
@@ -336,20 +355,20 @@ const OrderDetailPage: React.FC = () => {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span>Method:</span>
-                <span>{order.paymentMethod}</span>
+                <span>{order.payment.method}</span>
               </div>
               <div className="flex justify-between">
                 <span>Status:</span>
                 <span>
-                  <span className={`badge ${order.isPaid ? 'badge-success' : 'badge-warning'}`}>
-                    {order.isPaid ? 'Paid' : 'Unpaid'}
+                  <span className={`badge ${order.payment.status === 'completed' ? 'badge-success' : 'badge-warning'}`}>
+                    {order.payment.status === 'completed' ? 'Paid' : 'Unpaid'}
                   </span>
                 </span>
               </div>
-              {order.isPaid && (
+              {order.payment.status === 'completed' && (
                 <div className="flex justify-between">
                   <span>Date:</span>
-                  <span>{formatDate(order.paidAt)}</span>
+                  <span>{formatDate(order.payment.paidAt)}</span>
                 </div>
               )}
             </div>

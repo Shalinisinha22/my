@@ -1,5 +1,8 @@
 const Product = require('../models/Product');
 const Category = require('../models/Category');
+const csv = require('csv-parser');
+const fs = require('fs');
+const path = require('path');
 
 // Helper function to update category product count
 const updateCategoryProductCount = async (categoryId, storeId) => {
@@ -553,6 +556,101 @@ const recalculateCategoryProductCounts = async (req, res) => {
   }
 };
 
+// @desc    Bulk upload products from CSV
+// @route   POST /api/products/bulk-upload
+// @access  Private
+const bulkUploadProducts = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No CSV file uploaded' });
+    }
+
+    const results = [];
+    const errors = [];
+    let successCount = 0;
+
+    // Parse CSV file
+    const csvData = req.file.buffer.toString();
+    const lines = csvData.split('\n');
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      
+      try {
+        const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+        const productData = {};
+        
+        headers.forEach((header, index) => {
+          if (values[index]) {
+            productData[header] = values[index];
+          }
+        });
+
+        // Validate required fields
+        if (!productData.name || !productData.price || !productData.category || !productData.brand) {
+          errors.push(`Row ${i + 1}: Missing required fields (name, price, category, brand)`);
+          continue;
+        }
+
+        // Find category by name
+        const category = await Category.findOne({
+          name: { $regex: new RegExp(productData.category, 'i') },
+          storeId: req.storeId
+        });
+
+        if (!category) {
+          errors.push(`Row ${i + 1}: Category "${productData.category}" not found`);
+          continue;
+        }
+
+        // Create product
+        const product = await Product.create({
+          name: productData.name,
+          slug: productData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          description: productData.description || productData.name,
+          shortDescription: productData.shortDescription,
+          sku: productData.sku,
+          price: parseFloat(productData.price),
+          discountPrice: productData.discountPrice ? parseFloat(productData.discountPrice) : undefined,
+          category: category._id,
+          brand: productData.brand,
+          stock: {
+            quantity: parseInt(productData.countInStock) || 0,
+            lowStockThreshold: 10,
+            trackQuantity: true
+          },
+          attributes: {
+            color: productData.color,
+            size: productData.size ? productData.size.split('|') : undefined,
+            material: productData.material
+          },
+          tags: productData.tags ? productData.tags.split('|') : undefined,
+          status: 'active',
+          storeId: req.storeId
+        });
+
+        successCount++;
+        results.push(product);
+
+      } catch (error) {
+        errors.push(`Row ${i + 1}: ${error.message}`);
+      }
+    }
+
+    res.json({
+      message: `Bulk upload completed. ${successCount} products created.`,
+      successCount,
+      errorCount: errors.length,
+      errors: errors.slice(0, 10), // Limit errors shown
+      products: results
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getProducts,
   getProductById,
@@ -567,5 +665,6 @@ module.exports = {
   updateProductStock,
   bulkUpdateProducts,
   getProductStats,
-  recalculateCategoryProductCounts
+  recalculateCategoryProductCounts,
+  bulkUploadProducts
 };

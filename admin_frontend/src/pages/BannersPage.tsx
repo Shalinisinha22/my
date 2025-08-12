@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search, Image as ImageIcon, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
+import axiosInstance from '../config/axios';
 
 interface Banner {
   _id: string;
   title: string;
   image: string;
-  link?: string;
-  position: 'hero' | 'sidebar' | 'popup';
-  isActive: boolean;
-  startDate?: string;
-  endDate?: string;
+  link?: {
+    url: string;
+  };
+  position: 'hero' | 'sidebar' | 'popup' | 'header' | 'footer';
+  status: 'active' | 'inactive';
+  display?: {
+    startDate?: string;
+    endDate?: string;
+  };
   createdAt: string;
 }
 
@@ -24,61 +29,50 @@ const BannersPage: React.FC = () => {
     image: '',
     link: '',
     position: 'hero' as 'hero' | 'sidebar' | 'popup',
-    isActive: true,
+    status: 'active' as 'active' | 'inactive',
     startDate: '',
     endDate: '',
   });
 
-  // Mock data for demonstration
   useEffect(() => {
-    const mockBanners: Banner[] = [
-      {
-        _id: '1',
-        title: 'Summer Sale 2024',
-        image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800',
-        link: '/products?category=summer',
-        position: 'hero',
-        isActive: true,
-        startDate: '2024-06-01',
-        endDate: '2024-08-31',
-        createdAt: '2024-05-15',
-      },
-      {
-        _id: '2',
-        title: 'New Arrivals',
-        image: 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=400',
-        position: 'sidebar',
-        isActive: true,
-        createdAt: '2024-05-20',
-      },
-    ];
-    setBanners(mockBanners);
+    fetchBanners();
   }, []);
+
+  const fetchBanners = async () => {
+    try {
+      const { data } = await axiosInstance.get('/banners');
+      setBanners(data.banners || []);
+    } catch (error: any) {
+      toast.error('Failed to fetch banners');
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const newBanner: Banner = {
-      _id: editingBanner?._id || Date.now().toString(),
+    const bannerData = {
       title: formData.title,
       image: formData.image,
-      link: formData.link || undefined,
+      link: formData.link ? { url: formData.link } : undefined,
       position: formData.position,
-      isActive: formData.isActive,
-      startDate: formData.startDate || undefined,
-      endDate: formData.endDate || undefined,
-      createdAt: editingBanner?.createdAt || new Date().toISOString(),
+      status: formData.status,
+      display: {
+        startDate: formData.startDate || undefined,
+        endDate: formData.endDate || undefined,
+      }
     };
 
-    if (editingBanner) {
-      setBanners(prev => prev.map(b => b._id === editingBanner._id ? newBanner : b));
-      toast.success('Banner updated successfully');
-    } else {
-      setBanners(prev => [...prev, newBanner]);
-      toast.success('Banner created successfully');
-    }
+    const apiCall = editingBanner 
+      ? axiosInstance.put(`/banners/${editingBanner._id}`, bannerData)
+      : axiosInstance.post('/banners', bannerData);
 
-    resetForm();
+    apiCall.then(() => {
+      toast.success(editingBanner ? 'Banner updated successfully' : 'Banner created successfully');
+      fetchBanners();
+      resetForm();
+    }).catch((error: any) => {
+      toast.error(error.response?.data?.message || 'Failed to save banner');
+    });
   };
 
   const resetForm = () => {
@@ -87,7 +81,7 @@ const BannersPage: React.FC = () => {
       image: '',
       link: '',
       position: 'hero',
-      isActive: true,
+      status: 'active',
       startDate: '',
       endDate: '',
     });
@@ -99,20 +93,25 @@ const BannersPage: React.FC = () => {
     setFormData({
       title: banner.title,
       image: banner.image,
-      link: banner.link || '',
+      link: banner.link?.url || '',
       position: banner.position,
-      isActive: banner.isActive,
-      startDate: banner.startDate || '',
-      endDate: banner.endDate || '',
+      status: banner.status,
+      startDate: banner.display?.startDate || '',
+      endDate: banner.display?.endDate || '',
     });
     setEditingBanner(banner);
     setShowForm(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this banner?')) {
-      setBanners(prev => prev.filter(b => b._id !== id));
-      toast.success('Banner deleted successfully');
+      try {
+        await axiosInstance.delete(`/banners/${id}`);
+        toast.success('Banner deleted successfully');
+        fetchBanners();
+      } catch (error: any) {
+        toast.error('Failed to delete banner');
+      }
     }
   };
 
@@ -163,12 +162,14 @@ const BannersPage: React.FC = () => {
                 </label>
                 <select
                   value={formData.position}
-                  onChange={(e) => setFormData({ ...formData, position: e.target.value as 'hero' | 'sidebar' | 'popup' })}
+                  onChange={(e) => setFormData({ ...formData, position: e.target.value as any })}
                   className="input"
                 >
                   <option value="hero">Hero Banner</option>
                   <option value="sidebar">Sidebar Banner</option>
                   <option value="popup">Popup Banner</option>
+                  <option value="header">Header Banner</option>
+                  <option value="footer">Footer Banner</option>
                 </select>
               </div>
 
@@ -227,8 +228,8 @@ const BannersPage: React.FC = () => {
                 <label className="flex items-center">
                   <input
                     type="checkbox"
-                    checked={formData.isActive}
-                    onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                    checked={formData.status === 'active'}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.checked ? 'active' : 'inactive' })}
                     className="mr-2"
                   />
                   Active
@@ -279,17 +280,17 @@ const BannersPage: React.FC = () => {
               <div className="p-4">
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="font-medium">{banner.title}</h3>
-                  <span className={`badge ${banner.isActive ? 'badge-success' : 'badge-danger'}`}>
-                    {banner.isActive ? 'Active' : 'Inactive'}
+                  <span className={`badge ${banner.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
+                    {banner.status === 'active' ? 'Active' : 'Inactive'}
                   </span>
                 </div>
                 <div className="text-sm text-gray-500 mb-2">
                   Position: <span className="capitalize">{banner.position}</span>
                 </div>
-                {banner.link && (
+                {banner.link?.url && (
                   <div className="flex items-center text-sm text-blue-600 mb-3">
                     <ExternalLink className="h-3 w-3 mr-1" />
-                    <span className="truncate">{banner.link}</span>
+                    <span className="truncate">{banner.link.url}</span>
                   </div>
                 )}
                 <div className="flex justify-end space-x-2">

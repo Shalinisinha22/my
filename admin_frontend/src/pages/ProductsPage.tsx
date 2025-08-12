@@ -212,12 +212,20 @@ const ProductsPage: React.FC = () => {
         >
           <Plus className="h-5 w-5 mr-1" /> Add New Product
         </button>
-        <button
-          onClick={() => navigate('/products/bulk-upload')}
-          className="btn btn-secondary ml-2"
-        >
-          Bulk Upload
-        </button>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => navigate('/products/new')}
+            className="btn btn-primary"
+          >
+            <Plus className="h-5 w-5 mr-1" /> Add New Product
+          </button>
+          <button
+            onClick={() => navigate('/products/bulk-upload')}
+            className="btn btn-secondary"
+          >
+            Bulk Upload
+          </button>
+        </div>
       </div>
 
       <div className="card mb-6">

@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { Upload, Download, FileText, AlertCircle, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import axiosInstance from '../config/axios';
 
 const BulkUploadPage: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadResults, setUploadResults] = useState<{
-    success: number;
+    successCount: number;
+    errorCount: number;
     errors: string[];
   } | null>(null);
 
@@ -28,23 +30,40 @@ const BulkUploadPage: React.FC = () => {
 
     setUploading(true);
     
-    // Simulate upload process
-    setTimeout(() => {
-      setUploadResults({
-        success: 8,
-        errors: [
-          'Row 3: Missing required field "name"',
-          'Row 7: Invalid price format',
-        ],
+    try {
+      const formData = new FormData();
+      formData.append('csv', file);
+
+      const { data } = await axiosInstance.post('/products/bulk-upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
+
+      setUploadResults({
+        successCount: data.successCount,
+        errorCount: data.errorCount,
+        errors: data.errors || [],
+      });
+      
+      if (data.successCount > 0) {
+        toast.success(`Successfully uploaded ${data.successCount} products`);
+      }
+      
+      if (data.errorCount > 0) {
+        toast.error(`${data.errorCount} products failed to upload`);
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Upload failed');
       setUploading(false);
-      toast.success('Bulk upload completed');
-    }, 3000);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const downloadTemplate = () => {
-    const csvContent = `name,description,price,discountPrice,brand,category,productType,countInStock,sku,color,material,size,features,offers
-"Sample Product","Product description",99.99,79.99,"Brand Name","accessories","accessory",10,"SKU001","black","leather","One Size","Feature 1|Feature 2","Offer 1|Offer 2"`;
+    const csvContent = `name,description,price,discountPrice,brand,category,countInStock,sku,color,material,size,tags
+"Sample Product","Product description",99.99,79.99,"Brand Name","Women",10,"SKU001","black","leather","S|M|L","summer|casual"`;
     
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -114,7 +133,7 @@ const BulkUploadPage: React.FC = () => {
                 <h3 className="font-medium mb-2">Upload Results</h3>
                 <div className="flex items-center text-green-600 mb-2">
                   <CheckCircle className="h-4 w-4 mr-2" />
-                  {uploadResults.success} products uploaded successfully
+                  {uploadResults.successCount} products uploaded successfully
                 </div>
                 {uploadResults.errors.length > 0 && (
                   <div>
