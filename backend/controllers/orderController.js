@@ -214,10 +214,135 @@ const getOrderStats = async (req, res) => {
   }
 };
 
+// @desc    Create new order
+// @route   POST /api/orders
+// @access  Private
+const createOrder = async (req, res) => {
+  try {
+    const order = new Order({
+      ...req.body,
+      storeId: req.storeId
+    });
+    const savedOrder = await order.save();
+    res.status(201).json(savedOrder);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// @desc    Update order
+// @route   PUT /api/orders/:id
+// @access  Private
+const updateOrder = async (req, res) => {
+  try {
+    const order = await Order.findOneAndUpdate(
+      { _id: req.params.id, storeId: req.storeId },
+      req.body,
+      { new: true, runValidators: true }
+    );
+    
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    
+    res.json(order);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// @desc    Delete order
+// @route   DELETE /api/orders/:id
+// @access  Private
+const deleteOrder = async (req, res) => {
+  try {
+    const order = await Order.findOneAndDelete({
+      _id: req.params.id,
+      storeId: req.storeId
+    });
+    
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    
+    res.json({ message: 'Order deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Export orders
+// @route   GET /api/orders/export
+// @access  Private
+const exportOrders = async (req, res) => {
+  try {
+    const orders = await Order.find({ storeId: req.storeId })
+      .populate('customer', 'firstName lastName email')
+      .sort({ createdAt: -1 });
+    
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Refund order
+// @route   POST /api/orders/:id/refund
+// @access  Private
+const refundOrder = async (req, res) => {
+  try {
+    const order = await Order.findOne({
+      _id: req.params.id,
+      storeId: req.storeId
+    });
+    
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    
+    order.status = 'refunded';
+    order.payment.status = 'refunded';
+    order.payment.refundedAt = new Date();
+    
+    const updatedOrder = await order.save();
+    res.json(updatedOrder);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// @desc    Cancel order
+// @route   PUT /api/orders/:id/cancel
+// @access  Private
+const cancelOrder = async (req, res) => {
+  try {
+    const order = await Order.findOne({
+      _id: req.params.id,
+      storeId: req.storeId
+    });
+    
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    
+    order.status = 'cancelled';
+    const updatedOrder = await order.save();
+    res.json(updatedOrder);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getOrders,
   getOrderById,
+  createOrder,
+  updateOrder,
+  deleteOrder,
   updateOrderStatus,
   markOrderAsPaid,
-  getOrderStats
+  getOrderStats,
+  exportOrders,
+  refundOrder,
+  cancelOrder
 };

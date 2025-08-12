@@ -37,12 +37,10 @@ const protectCustomer = async (req, res, next) => {
       next();
     } catch (error) {
       console.error('Customer auth error:', error);
-      res.status(401).json({ message: 'Not authorized' });
+      return res.status(401).json({ message: 'Not authorized' });
     }
-  }
-
-  if (!token) {
-    res.status(401).json({ message: 'Not authorized, no token' });
+  } else {
+    return res.status(401).json({ message: 'Not authorized, no token' });
   }
 };
 

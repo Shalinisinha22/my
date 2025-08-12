@@ -52,7 +52,14 @@ export const CustomerProvider = ({ children }) => {
           }
 
           // Verify with the server
+          console.log('🔍 Checking authentication with server...');
+          console.log('📋 Token:', token ? 'Present' : 'Missing');
+          console.log('🏪 Store ID:', storeId);
+          console.log('🏪 Store Name:', storeName);
+          
           const customerData = await userService.getProfile();
+          console.log('✅ Server response:', customerData);
+          
           if (customerData) {
             setCustomer(customerData);
             localStorage.setItem('customer', JSON.stringify(customerData));
@@ -64,7 +71,12 @@ export const CustomerProvider = ({ children }) => {
             throw new Error('Invalid authentication');
           }
         } catch (err) {
-          console.error('Auth check failed:', err);
+          console.error('❌ Auth check failed:', err);
+          console.error('🔍 Error details:', {
+            status: err.status,
+            message: err.message,
+            stack: err.stack
+          });
           
           // Only clear auth data if it's a 401 Unauthorized error
           // This prevents logout on network errors or temporary server issues
@@ -74,6 +86,7 @@ export const CustomerProvider = ({ children }) => {
             err.message.includes('Invalid authentication') ||
             err.message.includes('Token expired')
           ))) {
+            console.log('🚫 Authentication error detected, clearing auth data');
             // Clear all auth data only on authentication errors
             localStorage.clear();
             setCustomer(null);
@@ -81,7 +94,7 @@ export const CustomerProvider = ({ children }) => {
           } else {
             // For network errors, retry once after a short delay
             if (retryCount < 1 && (err.status === 0 || err.message.includes('Network error'))) {
-              console.log('Network error during auth check, retrying...');
+              console.log('🌐 Network error during auth check, retrying...');
               setTimeout(() => {
                 authCheckComplete.current = false;
                 checkAuth(retryCount + 1);
@@ -91,7 +104,7 @@ export const CustomerProvider = ({ children }) => {
             
             // For other errors (server down, etc.), keep the user logged in
             // The existing localStorage data will remain
-            console.log('Non-auth error during profile check, keeping user logged in:', err.message);
+            console.log('⚠️ Non-auth error during profile check, keeping user logged in:', err.message);
           }
         }
       } else {
@@ -171,6 +184,9 @@ export const CustomerProvider = ({ children }) => {
       
       const response = await userService.updateProfile(userData);
       setCustomer(response.customer);
+      
+      // Update localStorage with the new customer data
+      localStorage.setItem('customer', JSON.stringify(response.customer));
       
       return response;
     } catch (err) {

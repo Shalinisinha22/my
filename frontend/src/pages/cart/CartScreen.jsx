@@ -1,11 +1,14 @@
 import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { addToCart, decreaseCart, removeFromCart, getTotals } from '../../redux/cartSlice';
+import { useCustomer } from '../../context/CustomerContext';
 
 const CartScreen = () => {
     const cart = useSelector((state) => state.cart);
     const dispatch = useDispatch();
+    const navigate = useNavigate();
+    const { customer, isAuthenticated } = useCustomer();
 
     useEffect(() => {
         dispatch(getTotals());
@@ -21,6 +24,20 @@ const CartScreen = () => {
 
     const handleIncreaseCart = (product) => {
         dispatch(addToCart(product));
+    };
+
+    const handleProceedToCheckout = () => {
+        if (!isAuthenticated) {
+            // Redirect to login with return path
+            navigate('/login', { state: { from: '/cart' } });
+            return;
+        }
+        
+        if (cart.cartItems.length === 0) {
+            return;
+        }
+        
+        navigate('/checkout');
     };
 
     return (
@@ -68,8 +85,12 @@ const CartScreen = () => {
                                 <span>Subtotal ({cart.cartTotalQuantity} items)</span>
                                 <span className="text-primary">${cart.cartTotalAmount.toFixed(2)}</span>
                             </div>
-                            <button className="checkout-button">
-                                Proceed to Checkout
+                            <button 
+                                className="checkout-button"
+                                onClick={handleProceedToCheckout}
+                                disabled={cart.cartItems.length === 0}
+                            >
+                                {!isAuthenticated ? 'Login to Checkout' : 'Proceed to Checkout'}
                             </button>
                             <div className="continue-shopping">
                                 <Link to="/">

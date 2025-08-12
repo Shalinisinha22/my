@@ -184,7 +184,8 @@ const customerLogin = async (req, res) => {
 // @access  Private
 const getCustomerProfile = async (req, res) => {
   try {
-    const customer = await Customer.findById(req.customer.id).select('-password');
+    // req.customer is already populated by the middleware
+    const customer = req.customer;
     
     if (!customer) {
       return res.status(404).json({ message: 'Customer not found' });
@@ -209,12 +210,23 @@ const updateCustomerProfile = async (req, res) => {
     }
 
     // Update allowed fields
-    const allowedUpdates = ['firstName', 'lastName', 'phone', 'dateOfBirth', 'gender', 'addresses', 'preferences'];
+    const allowedUpdates = ['firstName', 'lastName', 'phone', 'dateOfBirth', 'addresses', 'preferences'];
     allowedUpdates.forEach(field => {
       if (req.body[field] !== undefined) {
         customer[field] = req.body[field];
       }
     });
+
+    // Handle gender field separately to avoid empty string validation errors
+    if (req.body.gender !== undefined) {
+      // Only update gender if it's a valid enum value or null/undefined
+      if (req.body.gender === '' || req.body.gender === null || req.body.gender === undefined) {
+        // Remove gender field if empty string is provided
+        customer.gender = undefined;
+      } else if (['male', 'female', 'other', 'prefer_not_to_say'].includes(req.body.gender)) {
+        customer.gender = req.body.gender;
+      }
+    }
 
     const updatedCustomer = await customer.save();
 
@@ -269,10 +281,131 @@ const changePassword = async (req, res) => {
   }
 };
 
+// @desc    Get customer orders
+// @route   GET /api/customer/auth/orders
+// @access  Private
+const getCustomerOrders = async (req, res) => {
+  try {
+    const Order = require('../models/Order');
+    
+    const orders = await Order.find({
+      customer: req.customer._id,
+      storeId: req.customer.storeId
+    })
+    .populate('items.product', 'name images price')
+    .sort({ createdAt: -1 });
+
+    res.json(orders);
+  } catch (error) {
+    console.error('Get customer orders error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Create customer order
+// @route   POST /api/customer/auth/orders
+// @access  Private
+const createCustomerOrder = async (req, res) => {
+  try {
+    const Order = require('../models/Order');
+    const Product = require('../models/Product');
+    
+    const {
+      items,
+      billing,
+      shipping,
+      payment,
+      pricing,
+      status = 'pending'
+    } = req.body;
+
+    // Validate required fields
+    if (!items || !billing || !shipping || !payment || !pricing) {
+      return res.status(400).json({ 
+        message: 'Please provide items, billing, shipping, payment, and pricing information' 
+      });
+    }
+
+    // Generate order number
+    const count = await Order.countDocuments({ storeId: req.customer.storeId });
+    const orderNumber = `ORD-${Date.now()}-${(count + 1).toString().padStart(4, '0')}`;
+
+    // Create order data
+    const orderData = {
+      storeId: req.customer.storeId,
+      customer: req.customer._id,
+      orderNumber,
+      items: items.map(item => ({
+        product: item.product,
+        name: item.name,
+        image: item.image,
+        price: item.price,
+        quantity: item.quantity
+      })),
+      billing,
+      shipping,
+      payment,
+      pricing,
+      status
+    };
+
+    // Create the order
+    const order = new Order(orderData);
+    const savedOrder = await order.save();
+
+    // Update product stock if needed
+    for (const item of items) {
+      const product = await Product.findById(item.product);
+      if (product && product.stock && product.stock.trackQuantity) {
+        product.stock.quantity -= item.quantity;
+        await product.save();
+      }
+    }
+
+    // Populate customer info for response
+    const populatedOrder = await Order.findById(savedOrder._id)
+      .populate('customer', 'firstName lastName email');
+
+    res.status(201).json(populatedOrder);
+  } catch (error) {
+    console.error('Create customer order error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Get customer order by ID
+// @route   GET /api/customer/auth/orders/:id
+// @access  Private
+const getCustomerOrderById = async (req, res) => {
+  try {
+    const Order = require('../models/Order');
+    
+    const order = await Order.findOne({
+      _id: req.params.id,
+      customer: req.customer._id,
+      storeId: req.customer.storeId
+    })
+    .populate('items.product', 'name images price')
+    .populate('customer', 'firstName lastName email');
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    res.json(order);
+  } catch (error) {
+    console.error('Get customer order by ID error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   customerSignup,
   customerLogin,
   getCustomerProfile,
   updateCustomerProfile,
-  changePassword
+  changePassword,
+  getCustomerOrders,
+  createCustomerOrder,
+  getCustomerOrderById
 }; 
